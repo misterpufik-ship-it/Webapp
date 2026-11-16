@@ -6,10 +6,13 @@
 
 ## Деплой
 
+Заполни `deploy/beget-ssh.local.env` (в gitignore), затем:
+
 ```powershell
-cd scripts
-.\deploy-beget.ps1
+python scripts/deploy-beget-password.py
 ```
+
+Через VPS (если доступен): `.\scripts\deploy-beget.ps1`
 
 ## База данных (BeGet, опционально)
 
