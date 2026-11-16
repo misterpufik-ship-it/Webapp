@@ -240,19 +240,71 @@ function translate_feelings(string $draft, ?array $sender, ?array $recipient, ar
     ];
 }
 
-function translate_openai_if_possible(string $draft, ?array $sender, ?array $recipient, array $history, string $clarify): ?array
+function app_llm_config(): array
 {
-    $config = function_exists('app_db_config') ? app_db_config() : null;
-    $key = is_array($config) ? (string) ($config['openai_api_key'] ?? '') : '';
+    $out = [];
+    $cfg = function_exists('app_db_config') ? app_db_config() : null;
+    if (is_array($cfg)) {
+        $out = $cfg;
+    }
+    $or = __DIR__ . '/openrouter.local.php';
+    if (is_file($or)) {
+        $extra = require $or;
+        if (is_array($extra)) {
+            $out = array_merge($out, $extra);
+        }
+    }
+    return $out;
+}
+
+function app_llm_key_configured(): bool
+{
+    $cfg = app_llm_config();
+    $key = trim((string) ($cfg['openrouter_api_key'] ?? $cfg['openai_api_key'] ?? ''));
+    if ($key !== '') {
+        return true;
+    }
+    return trim((string) (getenv('OPENROUTER_API_KEY') ?: getenv('OPENAI_API_KEY') ?: '')) !== '';
+}
+
+function translate_normalize_llm_result(array $result, string $nick, string $myNick): ?array
+{
+    if (isset($result['proposed_messages']) && empty($result['messages']) && is_array($result['proposed_messages'])) {
+        $pm = array_values($result['proposed_messages']);
+        $result['messages'] = [
+            'primary' => (string) ($pm[0] ?? ''),
+            'variant_a' => (string) ($pm[1] ?? ($pm[0] ?? '')),
+            'variant_b' => (string) ($pm[2] ?? ($pm[0] ?? '')),
+        ];
+    }
+    $messages = $result['messages'] ?? null;
+    if (!is_array($messages) || trim((string) ($messages['primary'] ?? '')) === '') {
+        return null;
+    }
+    $result['nick'] = (string) ($result['nick'] ?? $nick);
+    $result['myNick'] = (string) ($result['myNick'] ?? $myNick);
+    $result['clarification_needed'] = (bool) ($result['clarification_needed'] ?? false);
+    return $result;
+}
+
+function translate_openrouter_if_possible(string $draft, ?array $sender, ?array $recipient, array $history, string $clarify): ?array
+{
+    $config = app_llm_config();
+    $key = trim((string) ($config['openrouter_api_key'] ?? $config['openai_api_key'] ?? ''));
     if ($key === '') {
-        $key = (string) (getenv('OPENAI_API_KEY') ?: '');
+        $key = trim((string) (getenv('OPENROUTER_API_KEY') ?: getenv('OPENAI_API_KEY') ?: ''));
     }
     if ($key === '') {
         return null;
     }
-    $model = is_array($config) ? (string) ($config['openai_model'] ?? 'gpt-4.1-mini') : 'gpt-4.1-mini';
+
+    $model = (string) ($config['openrouter_model'] ?? 'deepseek/deepseek-chat');
+    $url = (string) ($config['openrouter_url'] ?? 'https://openrouter.ai/api/v1/chat/completions');
+    $referer = (string) ($config['openrouter_referer'] ?? 'https://nostradamus-1503.ru/WeApp/');
+    $title = (string) ($config['openrouter_title'] ?? 'Perevodchik chuvstv');
+
     $nick = translate_call_as($sender, $recipient);
-    $myNick = translate_nicknames($sender)['partner_calls_me'] ?? '';
+    $myNick = (string) (translate_nicknames($sender)['partner_calls_me'] ?? '');
     $recipientSafe = translate_sanitize_recipient($recipient);
     $historyBits = array_map(static function ($t) {
         return ['draft' => $t['draft'] ?? '', 'translated' => $t['translated'] ?? ''];
@@ -260,11 +312,12 @@ function translate_openai_if_possible(string $draft, ?array $sender, ?array $rec
 
     $payload = [
         'model' => $model,
+        'temperature' => 0.4,
         'response_format' => ['type' => 'json_object'],
         'messages' => [
             [
                 'role' => 'system',
-                'content' => 'Ты переводчик чувств для пары. Не судья и не терапевт. Не используй стереотипы по полу. Знак зодиака не используй в тексте. Называй получателя личным обращением. Ответ строго JSON: emotion, need, clarification_needed, clarification_question, messages{primary,variant_a,variant_b}, recommended, actions, styleNotes, safety_flags, nick.',
+                'content' => 'Ты — переводчик чувств для пары. Не судья и не терапевт. Не используй стереотипы по полу. Знак зодиака не используй в тексте сообщения. Называй получателя личным обращением (прозвище вроде «Жужу»), не паспортным именем. Не меняй цель отправителя. Если черновик слишком короткий или неясный — clarification_needed=true и один clarification_question. Иначе напиши 3 варианта текста для партнёра: primary (основной), variant_a (прямее и конкретнее), variant_b (мягче, я-сообщения). Ответ строго JSON: emotion, need, clarification_needed, clarification_question, messages{primary,variant_a,variant_b}, recommended, actions, styleNotes, safety_flags, nick, myNick.',
             ],
             [
                 'role' => 'user',
@@ -280,16 +333,18 @@ function translate_openai_if_possible(string $draft, ?array $sender, ?array $rec
         ],
     ];
 
-    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $key,
+            'HTTP-Referer: ' . $referer,
+            'X-Title: ' . $title,
         ],
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 25,
+        CURLOPT_TIMEOUT => 40,
     ]);
     $raw = curl_exec($ch);
     curl_close($ch);
@@ -299,10 +354,18 @@ function translate_openai_if_possible(string $draft, ?array $sender, ?array $rec
     $decoded = json_decode($raw, true);
     $content = $decoded['choices'][0]['message']['content'] ?? '';
     $result = json_decode((string) $content, true);
-    if (!is_array($result) || empty($result['messages'])) {
+    if (!is_array($result)) {
+        if (preg_match('/\{.*\}/s', (string) $content, $m)) {
+            $result = json_decode($m[0], true);
+        }
+    }
+    if (!is_array($result)) {
         return null;
     }
-    $result['nick'] = $result['nick'] ?? $nick;
-    $result['myNick'] = $result['myNick'] ?? $myNick;
-    return $result;
+    return translate_normalize_llm_result($result, $nick, $myNick);
+}
+
+function translate_openai_if_possible(string $draft, ?array $sender, ?array $recipient, array $history, string $clarify): ?array
+{
+    return translate_openrouter_if_possible($draft, $sender, $recipient, $history, $clarify);
 }

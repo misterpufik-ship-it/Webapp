@@ -238,9 +238,9 @@ if ($action === 'translate') {
     $recipientRaw = $role === 'owner' ? ($data['partner_profile'] ?? null) : ($data['owner_profile'] ?? null);
     $recipient = translate_sanitize_recipient(is_array($recipientRaw) ? $recipientRaw : null);
     $history = dialog_load($code, $role);
-    $llm = translate_openai_if_possible($draft, is_array($sender) ? $sender : null, $recipient, $history, $clarify);
+    $llm = translate_openrouter_if_possible($draft, is_array($sender) ? $sender : null, $recipient, $history, $clarify);
     $result = $llm ?? translate_feelings($draft, is_array($sender) ? $sender : null, $recipient, $history, $clarify);
-    echo json_encode(['ok' => true, 'result' => $result, 'engine' => $llm ? 'openai' : 'local'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => true, 'result' => $result, 'engine' => $llm ? 'deepseek-openrouter' : 'local'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
