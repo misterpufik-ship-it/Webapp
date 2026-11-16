@@ -232,3 +232,19 @@ button.secondary {
   font-size: 0.85rem;
   margin-top: 0.5rem;
 }
+
+.custom-answer-block {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.custom-answer-block .field-label {
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+}
+
+.custom-answer-block textarea {
+  width: 100%;
+  min-height: 4.5rem;
+}

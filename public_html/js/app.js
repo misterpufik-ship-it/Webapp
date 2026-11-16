@@ -51,10 +51,17 @@ function loadLocal() {
   }
 }
 
+function unwrapSingle(v) {
+  if (v && typeof v === "object" && "value" in v) return v.value;
+  return v;
+}
+
 function buildExportPayload() {
   const block_a = { ...state.answers.blockA };
-  const duration = state.answers.blockB.B1_duration;
-  const living = state.answers.blockB.B1_living;
+  const duration = unwrapSingle(state.answers.blockB.B1_duration);
+  const living = unwrapSingle(state.answers.blockB.B1_living);
+  const durationObj = state.answers.blockB.B1_duration;
+  const livingObj = state.answers.blockB.B1_living;
   const b1Map = {
     less_year: "меньше года",
     "1-3": "1-3 года",
@@ -66,7 +73,9 @@ function buildExportPayload() {
   const block_b = {
     B1_duration_cohabitation: {
       duration_label: b1Map[duration] || duration,
+      duration_custom: typeof durationObj === "object" ? durationObj.custom || "" : "",
       living_together: livingMap[living] ?? null,
+      living_custom: typeof livingObj === "object" ? livingObj.custom || "" : "",
     },
     B2_frequent_disagreements: state.answers.blockB.B2_frequent_disagreements,
     B3_missing_now: state.answers.blockB.B3_missing_now || "",
@@ -96,6 +105,36 @@ function downloadJson() {
   URL.revokeObjectURL(a.href);
 }
 
+function parseChoiceStored(stored, isSingle) {
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+    if ("selected" in stored || "value" in stored) {
+      return {
+        selected: stored.selected ?? (stored.value ? [stored.value] : []),
+        value: stored.value ?? null,
+        custom: stored.custom ?? "",
+      };
+    }
+    if (stored.other) return { selected: [], value: null, custom: stored.other };
+  }
+  if (Array.isArray(stored)) return { selected: stored, value: null, custom: "" };
+  if (typeof stored === "string" && stored) {
+    return isSingle
+      ? { selected: [], value: stored, custom: "" }
+      : { selected: [stored], value: null, custom: "" };
+  }
+  return { selected: [], value: null, custom: "" };
+}
+
+function appendCustomTextField(body, storedCustom) {
+  const box = document.createElement("div");
+  box.className = "custom-answer-block";
+  box.innerHTML = `
+    <label class="field-label" for="custom-answer">Свой вариант / уточнение</label>
+    <p class="hint">Можно оставить пустым, если хватило пунктов выше.</p>
+    <textarea id="custom-answer" rows="3" maxlength="500" placeholder="Напиши своими словами…">${storedCustom || ""}</textarea>`;
+  body.appendChild(box);
+}
+
 function collectAnswer(q) {
   const key = q.id;
   const blockKey = q.id.startsWith("B") ? "blockB" : "blockA";
@@ -108,27 +147,26 @@ function collectAnswer(q) {
     return val;
   }
 
+  const custom = el("custom-answer")?.value?.trim() || "";
+
   if (q.type === "single") {
     const checked = document.querySelector('input[name="opt"]:checked');
-    if (!checked) return null;
-    let val = checked.value;
-    if (val === "other") {
-      const other = el("other-text")?.value?.trim();
-      if (!other) return null;
-      val = { other: other };
-    }
-    state.answers[blockKey][key] = val;
-    return val;
+    const value = checked?.value || null;
+    if (!value && !custom) return null;
+    const payload = { value, custom };
+    state.answers[blockKey][key] = payload;
+    return payload;
   }
 
   if (q.type === "multi") {
     const boxes = [...document.querySelectorAll('input[name="opt-m"]:checked')].map((c) => c.value);
-    if (boxes.length === 0) return null;
     if (boxes.includes("skip") && boxes.length > 1) {
       return "skip_conflict";
     }
-    state.answers[blockKey][key] = boxes;
-    return boxes;
+    if (boxes.length === 0 && !custom) return null;
+    const payload = { selected: boxes, custom };
+    state.answers[blockKey][key] = payload;
+    return payload;
   }
   return null;
 }
@@ -168,13 +206,12 @@ function renderQuestion() {
   }
 
   if (q.type === "single") {
+    const parsed = parseChoiceStored(stored, true);
     const wrap = document.createElement("div");
     wrap.className = "options";
     q.options.forEach((opt) => {
       const id = `opt-${opt.value}`;
-      const checked =
-        stored === opt.value ||
-        (typeof stored === "object" && stored?.other && opt.value === "other");
+      const checked = parsed.value === opt.value;
       wrap.innerHTML += `
         <label class="option" for="${id}">
           <input type="radio" name="opt" id="${id}" value="${opt.value}" ${checked ? "checked" : ""} />
@@ -182,24 +219,14 @@ function renderQuestion() {
         </label>`;
     });
     body.appendChild(wrap);
-    body.innerHTML += `<input type="text" class="name-input hidden" id="other-text" placeholder="Свой вариант" />`;
-
-    const syncOther = () => {
-      const sel = document.querySelector('input[name="opt"]:checked');
-      const other = el("other-text");
-      if (sel?.value === "other") {
-        other.classList.remove("hidden");
-        if (typeof stored === "object" && stored?.other) other.value = stored.other;
-      } else other.classList.add("hidden");
-    };
-    body.querySelectorAll('input[name="opt"]').forEach((inp) => inp.addEventListener("change", syncOther));
-    syncOther();
+    appendCustomTextField(body, parsed.custom);
   }
 
   if (q.type === "multi") {
+    const parsed = parseChoiceStored(stored, false);
+    const arr = parsed.selected;
     const wrap = document.createElement("div");
     wrap.className = "options";
-    const arr = Array.isArray(stored) ? stored : [];
     q.options.forEach((opt) => {
       const id = `optm-${opt.value}`;
       wrap.innerHTML += `
@@ -209,6 +236,7 @@ function renderQuestion() {
         </label>`;
     });
     body.appendChild(wrap);
+    appendCustomTextField(body, parsed.custom);
   }
 
   renderNav();
@@ -284,7 +312,7 @@ function nextStep() {
     return;
   }
   if (result === null || result === "") {
-    err.textContent = "Ответь на вопрос или напиши хотя бы коротко";
+    err.textContent = "Отметь хотя бы один пункт или напиши свой вариант в поле ниже";
     err.classList.remove("hidden");
     return;
   }

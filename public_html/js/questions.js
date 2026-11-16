@@ -3,24 +3,24 @@ export const QUESTIONS = {
     {
       id: "A1_upset_need",
       text: "Что тебе нужно, когда ты расстроен(а)?",
-      type: "single",
+      type: "multi",
+      hint: "Можно отметить несколько пунктов и дописать свой вариант ниже.",
       options: [
         { value: "listen", label: "Выслушали" },
         { value: "hug", label: "Обняли" },
         { value: "advice", label: "Дали совет" },
         { value: "space", label: "Оставили в покое" },
-        { value: "other", label: "Свой вариант" },
       ],
     },
     {
       id: "A2_request_style",
       text: "Как тебе легче воспринимать просьбы?",
-      type: "single",
+      type: "multi",
+      hint: "Можно несколько — как тебе комфортнее в разных ситуациях.",
       options: [
         { value: "direct", label: "Прямо и конкретно" },
         { value: "soft", label: "Мягко и деликатно" },
         { value: "with_reasons", label: "С объяснением причин" },
-        { value: "other", label: "Свой вариант" },
       ],
     },
     {
@@ -33,13 +33,13 @@ export const QUESTIONS = {
         { value: "words", label: "Слова поддержки" },
         { value: "acts", label: "Поступки" },
         { value: "help", label: "Помощь в делах" },
-        { value: "other", label: "Другое" },
       ],
     },
     {
       id: "A4_conflict_style",
       text: "Как реагируешь на конфликт?",
-      type: "single",
+      type: "multi",
+      hint: "Можно выбрать несколько, как ты обычно ведёшь себя.",
       options: [
         { value: "argue", label: "Спорю сразу" },
         { value: "withdraw", label: "Замыкаюсь" },
@@ -58,7 +58,6 @@ export const QUESTIONS = {
         { value: "control", label: "Контроль" },
         { value: "comparison", label: "Сравнение" },
         { value: "harsh_tone", label: "Резкий тон" },
-        { value: "other", label: "Другое" },
       ],
     },
     {
@@ -71,7 +70,6 @@ export const QUESTIONS = {
         { value: "fears", label: "Страхи" },
         { value: "intimacy", label: "Интимные потребности" },
         { value: "money", label: "Деньги" },
-        { value: "other", label: "Другое" },
         { value: "skip", label: "Предпочитаю пропустить" },
       ],
     },
@@ -93,7 +91,6 @@ export const QUESTIONS = {
         { value: "honesty", label: "Честности" },
         { value: "initiative", label: "Инициативы" },
         { value: "humor", label: "Юмора" },
-        { value: "other", label: "Другое" },
       ],
     },
   ],
@@ -102,6 +99,7 @@ export const QUESTIONS = {
       id: "B1_duration",
       text: "Как давно вы вместе?",
       type: "single",
+      customText: true,
       options: [
         { value: "less_year", label: "Меньше года" },
         { value: "1-3", label: "1–3 года" },
@@ -113,6 +111,7 @@ export const QUESTIONS = {
       id: "B1_living",
       text: "Живёте ли вместе?",
       type: "single",
+      customText: true,
       options: [
         { value: "yes", label: "Да" },
         { value: "no", label: "Нет" },
@@ -130,7 +129,6 @@ export const QUESTIONS = {
         { value: "family", label: "Родня / границы" },
         { value: "work", label: "Работа и загруз" },
         { value: "communication", label: "Общение" },
-        { value: "other", label: "Другое" },
       ],
     },
     {

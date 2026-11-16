@@ -9,8 +9,8 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Source = Join-Path $RepoRoot "public_html"
 $Remote = "$VpsUser@$VpsHost"
-$RemoteDir = "/tmp/webapp-deploy"
-$BegetPath = "/home/m/mrpuffch/nostradamus-1503.ru/public_html/webapp"
+$RemoteDir = "/tmp/weapp-deploy"
+$BegetPath = "/home/m/mrpuffch/nostradamus-1503.ru/public_html/WeApp"
 
 if (!(Test-Path $IdentityFile)) {
     throw "Missing SSH key: $IdentityFile"
@@ -19,7 +19,7 @@ if (!(Test-Path $Source)) {
     throw "Missing: $Source"
 }
 
-Write-Host "Webapp -> BeGet (nostradamus-1503.ru/webapp/)..."
+Write-Host "WeApp -> BeGet (nostradamus-1503.ru/WeApp/)..."
 ssh -i $IdentityFile -o BatchMode=yes -o ConnectTimeout=20 $Remote "rm -rf $RemoteDir && mkdir -p $RemoteDir && chown -R deploy:deploy $RemoteDir"
 scp -i $IdentityFile -o BatchMode=yes -r "${Source}\*" "${Remote}:$RemoteDir/"
 
@@ -31,4 +31,4 @@ $remoteCmd = @(
 ssh -i $IdentityFile -o BatchMode=yes -o ConnectTimeout=120 $Remote $remoteCmd
 if ($LASTEXITCODE -ne 0) { throw "BeGet deploy failed." }
 
-Write-Host "Done: https://nostradamus-1503.ru/webapp/"
+Write-Host "Done: https://nostradamus-1503.ru/WeApp/"
