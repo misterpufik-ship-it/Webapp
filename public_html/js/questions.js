@@ -1,10 +1,11 @@
+const MULTI_HINT = "Можно отметить несколько пунктов и дописать свой вариант в поле ниже.";
+
 export const QUESTIONS = {
   blockA: [
     {
       id: "A1_upset_need",
       text: "Что тебе нужно, когда ты расстроен(а)?",
       type: "multi",
-      hint: "Можно отметить несколько пунктов и дописать свой вариант ниже.",
       options: [
         { value: "listen", label: "Выслушали" },
         { value: "hug", label: "Обняли" },
@@ -16,7 +17,6 @@ export const QUESTIONS = {
       id: "A2_request_style",
       text: "Как тебе легче воспринимать просьбы?",
       type: "multi",
-      hint: "Можно несколько — как тебе комфортнее в разных ситуациях.",
       options: [
         { value: "direct", label: "Прямо и конкретно" },
         { value: "soft", label: "Мягко и деликатно" },
@@ -39,7 +39,6 @@ export const QUESTIONS = {
       id: "A4_conflict_style",
       text: "Как реагируешь на конфликт?",
       type: "multi",
-      hint: "Можно выбрать несколько, как ты обычно ведёшь себя.",
       options: [
         { value: "argue", label: "Спорю сразу" },
         { value: "withdraw", label: "Замыкаюсь" },
@@ -98,8 +97,7 @@ export const QUESTIONS = {
     {
       id: "B1_duration",
       text: "Как давно вы вместе?",
-      type: "single",
-      customText: true,
+      type: "multi",
       options: [
         { value: "less_year", label: "Меньше года" },
         { value: "1-3", label: "1–3 года" },
@@ -110,8 +108,7 @@ export const QUESTIONS = {
     {
       id: "B1_living",
       text: "Живёте ли вместе?",
-      type: "single",
-      customText: true,
+      type: "multi",
       options: [
         { value: "yes", label: "Да" },
         { value: "no", label: "Нет" },
@@ -154,3 +151,5 @@ export const QUESTIONS = {
     },
   ],
 };
+
+export const FORM_CHOICE_HINT = MULTI_HINT;

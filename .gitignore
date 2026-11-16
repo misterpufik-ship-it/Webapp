@@ -2,3 +2,4 @@ public_html/api/config.local.php
 .env
 deploy/beget-ssh.local.env
 *.log
+public_html/api/storage/pairs/*.json

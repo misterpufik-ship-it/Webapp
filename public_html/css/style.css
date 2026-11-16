@@ -39,7 +39,89 @@ header h1 {
 header p {
   color: var(--muted);
   font-size: 0.95rem;
-  margin: 0 0 1.5rem;
+  margin: 0 0 0.5rem;
+}
+
+.header-note {
+  font-size: 0.88rem !important;
+  margin-bottom: 1.25rem !important;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(232, 160, 184, 0.06);
+}
+
+.form-choice-banner {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 0.65rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: #12121a;
+  border: 1px dashed var(--border);
+}
+
+.pair-start-block {
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.section-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin: 0 0 0.35rem;
+}
+
+.code-input {
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.invite-panel {
+  margin-top: 0.85rem;
+}
+
+.invite-code {
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  text-align: center;
+  padding: 0.65rem;
+  border-radius: 10px;
+  background: #12121a;
+  border: 1px solid var(--border);
+}
+
+.invite-link {
+  display: block;
+  color: var(--accent);
+  word-break: break-all;
+  font-size: 0.82rem;
+  margin-bottom: 0.35rem;
+}
+
+.nav-row-tight {
+  margin-top: 0.65rem;
+}
+
+.pair-feedback {
+  margin: 0.65rem 0 0;
+}
+
+.pair-feedback.ok {
+  color: var(--ok);
+}
+
+.pair-feedback:not(.hidden) {
+  display: block;
+}
+
+button.secondary.busy {
+  opacity: 0.65;
+  pointer-events: none;
 }
 
 .card {

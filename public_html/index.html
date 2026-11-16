@@ -10,16 +10,48 @@
     <div class="wrap">
       <header>
         <h1>Переводчик чувств</h1>
-        <p>Анкета для пары (8 + 5 вопросов) на Nostradamus. Каждый заполняет отдельно.</p>
+        <p>Анкета для пары (8 + 5 вопросов). Каждый заполняет отдельно на своём устройстве.</p>
+        <p class="header-note">В вопросах с вариантами можно <strong>выбрать несколько</strong> и всегда есть поле для своего ответа.</p>
       </header>
 
       <section id="view-start">
         <div class="card">
           <label class="field-label" for="input-name">Как тебя подписать в анкете?</label>
           <input type="text" id="input-name" class="name-input" placeholder="Например, Никита" autocomplete="name" />
-          <p style="margin: 1rem 0 0.5rem; font-size: 0.9rem; color: var(--muted)">
-            Настя заполняет свою анкету по той же ссылке на своём устройстве — ответы не смешиваются, пока вы не обменяетесь файлами.
-          </p>
+
+          <div class="pair-start-block">
+            <p class="section-title">Связка с партнёром</p>
+            <p class="hint">Кто первый — нажми «Создать код» и отправь код или ссылку партнёру. Кто второй — вставь код ниже или открой ссылку от партнёра.</p>
+
+            <div class="code-row">
+              <input
+                type="text"
+                id="input-partner-code"
+                class="name-input code-input"
+                placeholder="Код партнёра (6 знаков)"
+                autocomplete="off"
+                maxlength="12"
+                spellcheck="false"
+              />
+            </div>
+
+            <div class="nav-row nav-row-tight">
+              <button type="button" class="secondary" id="btn-gen-code">Создать код пары</button>
+            </div>
+            <p id="start-pair-msg" class="hint pair-feedback hidden" aria-live="polite"></p>
+
+            <div id="start-code-panel" class="invite-panel hidden">
+              <p class="hint" style="margin-top: 0">Твой код (отправь партнёру):</p>
+              <div class="invite-code" id="start-invite-code">——————</div>
+              <p class="hint">Ссылка для партнёра (откроется анкета с кодом):</p>
+              <code class="invite-link" id="start-invite-link"></code>
+              <div class="nav-row nav-row-tight">
+                <button type="button" class="secondary" id="btn-copy-start-code">Копировать код</button>
+                <button type="button" class="secondary" id="btn-copy-start-link">Копировать ссылку</button>
+              </div>
+            </div>
+          </div>
+
           <div id="start-error" class="error hidden"></div>
           <div class="nav-row">
             <button type="button" class="primary" id="btn-begin">Начать анкету</button>
@@ -31,13 +63,14 @@
         </div>
         <div class="card">
           <p style="margin: 0; font-size: 0.85rem; color: var(--muted)">
-            Вопрос «чего не хватает» только для тебя. Можно скачать JSON или сохранить на сервер (если настроена БД).
+            Вопрос «чего не хватает» только для тебя. Можно скачать JSON; связывание пары работает через код на сервере.
           </p>
         </div>
       </section>
 
       <section id="view-form" class="hidden">
-        <p id="form-subtitle" style="color: var(--muted); font-size: 0.9rem; margin: 0 0 0.75rem"></p>
+        <p id="form-subtitle" style="color: var(--muted); font-size: 0.9rem; margin: 0 0 0.35rem"></p>
+        <p id="form-choice-hint" class="form-choice-banner hidden"></p>
         <div class="progress"><div id="progress-fill" style="width: 8%"></div></div>
         <div class="card">
           <label class="field-label" id="question-title"></label>
@@ -54,18 +87,28 @@
         <div class="card done-panel">
           <h2>Готово, <span id="done-name"></span>!</h2>
           <p class="ok">Анкета сохранена в браузере на этом устройстве.</p>
-          <button type="button" class="primary" id="btn-download" style="width: 100%; margin-top: 1rem">
+
+          <div id="done-pair-panel" class="share-box">
+            <strong>Связка пары</strong>
+            <p id="done-pair-role" class="hint" style="margin: 0.35rem 0"></p>
+            <p class="hint" style="margin: 0.5rem 0 0.25rem">Код для партнёра:</p>
+            <div class="invite-code" id="done-invite-code">——————</div>
+            <p class="hint" style="margin: 0.75rem 0 0.25rem">Ссылка — партнёр откроет анкету и сразу подставится код:</p>
+            <code class="invite-link" id="done-invite-link"></code>
+            <div class="nav-row nav-row-tight">
+              <button type="button" class="secondary" id="btn-copy-done-code">Копировать код</button>
+              <button type="button" class="secondary" id="btn-copy-done-link">Копировать ссылку</button>
+            </div>
+            <p id="done-pair-status" class="hint" style="margin-top: 0.65rem"></p>
+          </div>
+
+          <button type="button" class="primary" id="btn-download" style="width: 100%; margin-top: 0.5rem">
             Скачать JSON
           </button>
           <button type="button" class="secondary" id="btn-save-server" style="width: 100%; margin-top: 0.65rem">
             Сохранить на сервер
           </button>
           <p id="save-server-msg" class="hint" style="margin-top: 0.5rem"></p>
-          <div id="share-for-nastya" class="share-box">
-            <strong>Для Насти:</strong> отправь ей ссылку ниже, пусть введёт имя «Настя» и заполнит анкету на своём устройстве.
-            <br /><br />
-            Адрес: <code id="share-link"></code>
-          </div>
           <div class="nav-row">
             <button type="button" class="secondary" id="btn-restart">Править ответы</button>
             <button type="button" class="secondary" id="btn-new-person">Другой человек на этом ПК</button>
@@ -73,6 +116,6 @@
         </div>
       </section>
     </div>
-    <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/app.js?v=20260322"></script>
   </body>
 </html>

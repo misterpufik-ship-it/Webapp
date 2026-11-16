@@ -1,6 +1,7 @@
-import { QUESTIONS } from "./questions.js";
+import { QUESTIONS, FORM_CHOICE_HINT } from "./questions.js";
 
 const STORAGE_KEY = "couples_translator_profile_v1";
+const PAIR_STORAGE_KEY = "couples_translator_pair_v1";
 
 const el = (id) => document.getElementById(id);
 
@@ -10,6 +11,10 @@ const state = {
   step: 0,
   displayName: "",
   answers: { blockA: {}, blockB: {} },
+  pair: {
+    code: "",
+    role: "", // owner | partner
+  },
 };
 
 function allSteps() {
@@ -28,12 +33,110 @@ function progressPct() {
   return Math.round(((state.step + 1) / total) * 100);
 }
 
+function normalizeCodeInput(raw) {
+  return (raw || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 12);
+}
+
+function savePairLocal() {
+  localStorage.setItem(
+    PAIR_STORAGE_KEY,
+    JSON.stringify({ code: state.pair.code, role: state.pair.role }),
+  );
+}
+
+function loadPairLocal() {
+  try {
+    const raw = localStorage.getItem(PAIR_STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.code) state.pair.code = normalizeCodeInput(data.code);
+    if (data.role) state.pair.role = data.role;
+  } catch {
+    /* ignore */
+  }
+}
+
+function repairPairState() {
+  if (!state.pair.code) {
+    state.pair.role = "";
+    return;
+  }
+  if (!state.pair.role) state.pair.role = "owner";
+}
+
+function showStartFeedback(message, { ok = false, useError = false } = {}) {
+  const msg = el("start-pair-msg");
+  const err = el("start-error");
+  if (useError) {
+    err.textContent = message;
+    err.classList.remove("hidden");
+    msg?.classList.add("hidden");
+    if (msg) msg.textContent = "";
+    return;
+  }
+  err.classList.add("hidden");
+  if (msg) {
+    msg.textContent = message;
+    msg.classList.remove("hidden");
+    msg.classList.toggle("ok", ok);
+    msg.style.color = ok ? "var(--ok)" : "var(--muted)";
+  }
+}
+
+function inviteUrl(code) {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  if (code) url.searchParams.set("join", code);
+  return url.toString();
+}
+
+function parseJoinFromUrl() {
+  const url = new URL(window.location.href);
+  const join = url.searchParams.get("join");
+  if (!join) return "";
+  return normalizeCodeInput(join);
+}
+
+function stripJoinFromUrl() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("join")) return;
+  url.searchParams.delete("join");
+  const next = url.pathname + (url.search ? url.search : "") + url.hash;
+  window.history.replaceState({}, "", next);
+}
+
+async function apiPair(body) {
+  const res = await fetch("api/pair.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok && data.ok, status: res.status, data };
+}
+
+async function fetchPairStatus(code) {
+  try {
+    const res = await fetch(`api/pair.php?code=${encodeURIComponent(code)}`);
+    const data = await res.json();
+    if (data.ok && data.pair) return data.pair;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 function saveLocal() {
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
       displayName: state.displayName,
       answers: state.answers,
+      pair: state.pair,
       updatedAt: new Date().toISOString(),
     }),
   );
@@ -46,36 +149,48 @@ function loadLocal() {
     const data = JSON.parse(raw);
     if (data.displayName) state.displayName = data.displayName;
     if (data.answers) state.answers = data.answers;
+    if (data.pair?.code) {
+      state.pair.code = normalizeCodeInput(data.pair.code);
+      state.pair.role = data.pair.role || state.pair.role;
+    }
   } catch {
     /* ignore */
   }
 }
 
-function unwrapSingle(v) {
-  if (v && typeof v === "object" && "value" in v) return v.value;
-  return v;
+function parseChoiceStored(stored, legacySingle) {
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+    if ("selected" in stored || "value" in stored) {
+      const fromValue = stored.value ? [stored.value] : [];
+      return {
+        selected: stored.selected ?? fromValue,
+        custom: stored.custom ?? "",
+      };
+    }
+    if (stored.other) return { selected: [], custom: stored.other };
+  }
+  if (Array.isArray(stored)) return { selected: stored, custom: "" };
+  if (typeof stored === "string" && stored) {
+    return legacySingle ? { selected: [], custom: stored } : { selected: [stored], custom: "" };
+  }
+  return { selected: [], custom: "" };
+}
+
+function multiExport(stored) {
+  const parsed = parseChoiceStored(stored, false);
+  return { selected: parsed.selected, custom: parsed.custom || "" };
 }
 
 function buildExportPayload() {
   const block_a = { ...state.answers.blockA };
-  const duration = unwrapSingle(state.answers.blockB.B1_duration);
-  const living = unwrapSingle(state.answers.blockB.B1_living);
-  const durationObj = state.answers.blockB.B1_duration;
-  const livingObj = state.answers.blockB.B1_living;
-  const b1Map = {
-    less_year: "меньше года",
-    "1-3": "1-3 года",
-    more_3: "больше 3 лет",
-    prefer_not: "prefer_not",
-  };
-  const livingMap = { yes: true, no: false, sometimes: null };
+
+  const durationObj = multiExport(state.answers.blockB.B1_duration);
+  const livingObj = multiExport(state.answers.blockB.B1_living);
 
   const block_b = {
     B1_duration_cohabitation: {
-      duration_label: b1Map[duration] || duration,
-      duration_custom: typeof durationObj === "object" ? durationObj.custom || "" : "",
-      living_together: livingMap[living] ?? null,
-      living_custom: typeof livingObj === "object" ? livingObj.custom || "" : "",
+      duration: durationObj,
+      living: livingObj,
     },
     B2_frequent_disagreements: state.answers.blockB.B2_frequent_disagreements,
     B3_missing_now: state.answers.blockB.B3_missing_now || "",
@@ -84,8 +199,10 @@ function buildExportPayload() {
   };
 
   return {
-    version: 1,
+    version: 2,
     display_name: state.displayName,
+    pair_code: state.pair.code || null,
+    pair_role: state.pair.role || null,
     exported_at: new Date().toISOString(),
     questionnaire: {
       block_a,
@@ -105,32 +222,12 @@ function downloadJson() {
   URL.revokeObjectURL(a.href);
 }
 
-function parseChoiceStored(stored, isSingle) {
-  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
-    if ("selected" in stored || "value" in stored) {
-      return {
-        selected: stored.selected ?? (stored.value ? [stored.value] : []),
-        value: stored.value ?? null,
-        custom: stored.custom ?? "",
-      };
-    }
-    if (stored.other) return { selected: [], value: null, custom: stored.other };
-  }
-  if (Array.isArray(stored)) return { selected: stored, value: null, custom: "" };
-  if (typeof stored === "string" && stored) {
-    return isSingle
-      ? { selected: [], value: stored, custom: "" }
-      : { selected: [stored], value: null, custom: "" };
-  }
-  return { selected: [], value: null, custom: "" };
-}
-
 function appendCustomTextField(body, storedCustom) {
   const box = document.createElement("div");
   box.className = "custom-answer-block";
   box.innerHTML = `
     <label class="field-label" for="custom-answer">Свой вариант / уточнение</label>
-    <p class="hint">Можно оставить пустым, если хватило пунктов выше.</p>
+    <p class="hint">Можно дописать своими словами — даже если уже отметил пункты выше.</p>
     <textarea id="custom-answer" rows="3" maxlength="500" placeholder="Напиши своими словами…">${storedCustom || ""}</textarea>`;
   body.appendChild(box);
 }
@@ -148,27 +245,14 @@ function collectAnswer(q) {
   }
 
   const custom = el("custom-answer")?.value?.trim() || "";
-
-  if (q.type === "single") {
-    const checked = document.querySelector('input[name="opt"]:checked');
-    const value = checked?.value || null;
-    if (!value && !custom) return null;
-    const payload = { value, custom };
-    state.answers[blockKey][key] = payload;
-    return payload;
+  const boxes = [...document.querySelectorAll('input[name="opt-m"]:checked')].map((c) => c.value);
+  if (boxes.includes("skip") && boxes.length > 1) {
+    return "skip_conflict";
   }
-
-  if (q.type === "multi") {
-    const boxes = [...document.querySelectorAll('input[name="opt-m"]:checked')].map((c) => c.value);
-    if (boxes.includes("skip") && boxes.length > 1) {
-      return "skip_conflict";
-    }
-    if (boxes.length === 0 && !custom) return null;
-    const payload = { selected: boxes, custom };
-    state.answers[blockKey][key] = payload;
-    return payload;
-  }
-  return null;
+  if (boxes.length === 0 && !custom) return null;
+  const payload = { selected: boxes, custom };
+  state.answers[blockKey][key] = payload;
+  return payload;
 }
 
 function getStoredValue(q) {
@@ -184,6 +268,7 @@ function renderQuestion() {
   const title = el("question-title");
   const body = el("question-body");
   const err = el("step-error");
+  const choiceBanner = el("form-choice-hint");
   err.textContent = "";
   err.classList.add("hidden");
 
@@ -194,44 +279,22 @@ function renderQuestion() {
   const stored = getStoredValue(q);
   body.innerHTML = "";
 
-  if (q.hint) {
-    body.innerHTML += `<p class="hint">${q.hint}</p>`;
-  }
-
   if (q.type === "text") {
+    choiceBanner.classList.add("hidden");
+    if (q.hint) body.innerHTML += `<p class="hint">${q.hint}</p>`;
     body.innerHTML += `<textarea id="text-answer" rows="4" maxlength="${q.maxLength || 2000}">${stored || ""}</textarea>`;
-    renderNav();
-    el("progress-fill").style.width = `${progressPct()}%`;
-    return;
-  }
-
-  if (q.type === "single") {
-    const parsed = parseChoiceStored(stored, true);
-    const wrap = document.createElement("div");
-    wrap.className = "options";
-    q.options.forEach((opt) => {
-      const id = `opt-${opt.value}`;
-      const checked = parsed.value === opt.value;
-      wrap.innerHTML += `
-        <label class="option" for="${id}">
-          <input type="radio" name="opt" id="${id}" value="${opt.value}" ${checked ? "checked" : ""} />
-          <span>${opt.label}</span>
-        </label>`;
-    });
-    body.appendChild(wrap);
-    appendCustomTextField(body, parsed.custom);
-  }
-
-  if (q.type === "multi") {
+  } else {
+    choiceBanner.textContent = FORM_CHOICE_HINT;
+    choiceBanner.classList.remove("hidden");
+    if (q.hint) body.innerHTML += `<p class="hint">${q.hint}</p>`;
     const parsed = parseChoiceStored(stored, false);
-    const arr = parsed.selected;
     const wrap = document.createElement("div");
     wrap.className = "options";
     q.options.forEach((opt) => {
       const id = `optm-${opt.value}`;
       wrap.innerHTML += `
         <label class="option" for="${id}">
-          <input type="checkbox" name="opt-m" id="${id}" value="${opt.value}" ${arr.includes(opt.value) ? "checked" : ""} />
+          <input type="checkbox" name="opt-m" id="${id}" value="${opt.value}" ${parsed.selected.includes(opt.value) ? "checked" : ""} />
           <span>${opt.label}</span>
         </label>`;
     });
@@ -257,13 +320,92 @@ function showView(name) {
   el("view-done").classList.toggle("hidden", name !== "done");
 }
 
-function renderDone() {
+function updateStartPairPanel() {
+  const panel = el("start-code-panel");
+  if (!state.pair.code || state.pair.role !== "owner") {
+    panel?.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  el("start-invite-code").textContent = state.pair.code;
+  el("start-invite-link").textContent = inviteUrl(state.pair.code);
+}
+
+async function copyText(text, msgEl, okText) {
+  try {
+    await navigator.clipboard.writeText(text);
+    if (msgEl) {
+      msgEl.textContent = okText;
+      msgEl.style.color = "var(--ok)";
+    }
+  } catch {
+    if (msgEl) msgEl.textContent = "Не удалось скопировать — выдели текст вручную";
+  }
+}
+
+function formatPairStatus(pair) {
+  if (!pair) return "Статус пары: обновляется…";
+  if (pair.paired) {
+    return `Пара связана: ${pair.owner_name || "—"} и ${pair.partner_name || "—"} — обе анкеты на сервере.`;
+  }
+  const waits = [];
+  if (!pair.owner_has_profile) waits.push("ждём твою анкету");
+  if (!pair.partner_name) waits.push("ждём партнёра (код или ссылку)");
+  else if (!pair.partner_has_profile) waits.push(`ждём анкету ${pair.partner_name}`);
+  return `Статус: ${waits.join("; ")}.`;
+}
+
+async function refreshDonePairStatus() {
+  const statusEl = el("done-pair-status");
+  if (!state.pair.code) {
+    statusEl.textContent = "Код пары не задан — создай код на старте или дождись генерации после завершения.";
+    return;
+  }
+  const pair = await fetchPairStatus(state.pair.code);
+  statusEl.textContent = formatPairStatus(pair);
+}
+
+async function pushProfileToPair() {
+  if (!state.pair.code || !state.pair.role) return { ok: false };
+  const payload = buildExportPayload();
+  const { ok, data } = await apiPair({
+    action: "save_profile",
+    code: state.pair.code,
+    role: state.pair.role,
+    display_name: state.displayName,
+    profile: payload,
+  });
+  return { ok, pair: data.pair };
+}
+
+async function renderDone() {
   el("done-name").textContent = state.displayName || "без имени";
-  const url = new URL(window.location.href);
-  url.hash = "";
-  el("share-link").textContent = url.origin + url.pathname;
-  const msg = el("save-server-msg");
-  if (msg) msg.textContent = "";
+
+  if (!state.pair.code) {
+    const created = await apiPair({
+      action: "create",
+      display_name: state.displayName,
+    });
+    if (created.ok && created.data.pair?.code) {
+      state.pair.code = created.data.pair.code;
+      state.pair.role = "owner";
+      savePairLocal();
+    }
+  } else {
+    await pushProfileToPair();
+  }
+
+  el("done-invite-code").textContent = state.pair.code || "———";
+  el("done-invite-link").textContent = state.pair.code ? inviteUrl(state.pair.code) : "—";
+
+  const roleText =
+    state.pair.role === "partner"
+      ? "Ты подключился(ась) по коду партнёра — анкета ушла в общую пару на сервер."
+      : "Ты создал(а) код пары — отправь код или ссылку партнёру, пусть заполнит анкету у себя.";
+  el("done-pair-role").textContent = roleText;
+
+  await refreshDonePairStatus();
+  saveLocal();
 }
 
 async function saveToServer() {
@@ -280,7 +422,7 @@ async function saveToServer() {
       msg.textContent = `Сохранено на сервере (#${data.id}).`;
       msg.style.color = "var(--ok)";
     } else if (data.error === "db_not_configured") {
-      msg.textContent = "Серверное хранилище ещё не настроено — используй скачивание JSON.";
+      msg.textContent = "MySQL ещё не настроен — пара сохраняется через код выше.";
     } else {
       msg.textContent = `Не удалось сохранить: ${data.error || res.status}`;
     }
@@ -289,15 +431,116 @@ async function saveToServer() {
   }
 }
 
-function startForm() {
+async function generatePairCode() {
+  const btn = el("btn-gen-code");
   const name = el("input-name").value.trim();
   if (!name) {
-    el("start-error").textContent = "Укажи имя — так отличим твою анкету от анкеты Насти";
-    el("start-error").classList.remove("hidden");
+    showStartFeedback("Сначала укажи имя — так код будет привязан к твоей анкете.", { useError: true });
+    el("input-name").focus();
     return;
   }
+  if (state.pair.code && state.pair.role === "owner") {
+    updateStartPairPanel();
+    showStartFeedback("Код уже есть — отправь его партнёру ниже.", { ok: true });
+    el("start-code-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
+  }
+  const partnerCode = normalizeCodeInput(el("input-partner-code").value);
+  if (partnerCode) {
+    showStartFeedback(
+      "Ты ввёл код партнёра — нажми «Начать анкету», чтобы присоединиться, а не создавай новый код.",
+      { useError: true },
+    );
+    return;
+  }
+
+  const prevLabel = btn?.textContent || "Создать код пары";
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("busy");
+    btn.textContent = "Создаём код…";
+  }
+
+  try {
+    const created = await apiPair({ action: "create", display_name: name });
+    const code = created.data?.pair?.code;
+    if (!created.ok || !code) {
+      const detail = created.data?.error ? ` (${created.data.error})` : "";
+      showStartFeedback(
+        `Не удалось создать код${detail}. Проверь интернет и обнови страницу (Ctrl+F5).`,
+        { useError: true },
+      );
+      return;
+    }
+    state.displayName = name;
+    state.pair.code = code;
+    state.pair.role = "owner";
+    savePairLocal();
+    saveLocal();
+    updateStartPairPanel();
+    showStartFeedback("Готово! Отправь партнёру код или ссылку ниже.", { ok: true });
+    el("start-code-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch {
+    showStartFeedback("Ошибка сети при создании кода — попробуй ещё раз.", { useError: true });
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("busy");
+      btn.textContent = prevLabel;
+    }
+  }
+}
+
+async function startForm() {
+  const name = el("input-name").value.trim();
+  const err = el("start-error");
+  err.classList.add("hidden");
+
+  if (!name) {
+    err.textContent = "Укажи имя — так отличим твою анкету от анкеты партнёра";
+    err.classList.remove("hidden");
+    return;
+  }
+
+  const partnerCode = normalizeCodeInput(el("input-partner-code").value);
   state.displayName = name;
-  el("form-subtitle").textContent = `Анкета: ${name}`;
+
+  if (partnerCode) {
+    const check = await fetchPairStatus(partnerCode);
+    if (!check) {
+      err.textContent = "Код не найден. Проверь буквы/цифры или попроси партнёра создать новый.";
+      err.classList.remove("hidden");
+      return;
+    }
+    const joined = await apiPair({
+      action: "join",
+      code: partnerCode,
+      display_name: name,
+    });
+    if (!joined.ok) {
+      err.textContent =
+        joined.data?.error === "partner_taken"
+          ? "По этому коду уже записан другой партнёр."
+          : "Не удалось привязаться по коду.";
+      err.classList.remove("hidden");
+      return;
+    }
+    state.pair.code = partnerCode;
+    state.pair.role = "partner";
+    stripJoinFromUrl();
+  } else if (!state.pair.code) {
+    const created = await apiPair({ action: "create", display_name: name });
+    if (created.ok && created.data.pair?.code) {
+      state.pair.code = created.data.pair.code;
+      state.pair.role = "owner";
+      updateStartPairPanel();
+    }
+  } else if (!state.pair.role) {
+    state.pair.role = "owner";
+  }
+
+  savePairLocal();
+  el("form-subtitle").textContent = `Анкета: ${name}${state.pair.code ? ` · код пары ${state.pair.code}` : ""}`;
   showView("form");
   renderQuestion();
 }
@@ -321,7 +564,6 @@ function nextStep() {
   if (state.step >= allSteps().length - 1) {
     showView("done");
     renderDone();
-    saveLocal();
     return;
   }
   state.step += 1;
@@ -335,6 +577,26 @@ function prevStep() {
   }
 }
 
+function mapDurationBack(block) {
+  const d = block?.duration;
+  if (d && typeof d === "object" && d.selected) return d;
+  const label = block?.duration_label;
+  if (!label) return "";
+  if (label.includes("меньше")) return { selected: ["less_year"], custom: "" };
+  if (label.includes("1-3")) return { selected: ["1-3"], custom: "" };
+  if (label.includes("больше")) return { selected: ["more_3"], custom: "" };
+  return { selected: ["prefer_not"], custom: "" };
+}
+
+function mapLivingBack(block) {
+  const l = block?.living;
+  if (l && typeof l === "object" && l.selected) return l;
+  const v = block?.living_together;
+  if (v === true) return { selected: ["yes"], custom: "" };
+  if (v === false) return { selected: ["no"], custom: "" };
+  return { selected: ["sometimes"], custom: "" };
+}
+
 function importFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
@@ -345,13 +607,17 @@ function importFile(file) {
       state.answers.blockA = { ...(q.block_a || {}) };
       const bb = q.block_b || {};
       state.answers.blockB = {
-        B1_duration: mapDurationBack(bb.B1_duration_cohabitation?.duration_label),
-        B1_living: mapLivingBack(bb.B1_duration_cohabitation?.living_together),
+        B1_duration: mapDurationBack(bb.B1_duration_cohabitation),
+        B1_living: mapLivingBack(bb.B1_duration_cohabitation),
         B2_frequent_disagreements: bb.B2_frequent_disagreements,
         B3_missing_now: bb.B3_missing_now,
         B4_partner_strengths: bb.B4_partner_strengths,
         B5_improve_one_month: bb.B5_improve_one_month,
       };
+      if (data.pair_code) {
+        state.pair.code = normalizeCodeInput(data.pair_code);
+        state.pair.role = data.pair_role || state.pair.role;
+      }
       saveLocal();
       alert("Анкета загружена из файла");
     } catch {
@@ -361,25 +627,35 @@ function importFile(file) {
   reader.readAsText(file);
 }
 
-function mapDurationBack(label) {
-  if (!label) return "";
-  if (label.includes("меньше")) return "less_year";
-  if (label.includes("1-3")) return "1-3";
-  if (label.includes("больше")) return "more_3";
-  return "prefer_not";
-}
-
-function mapLivingBack(v) {
-  if (v === true) return "yes";
-  if (v === false) return "no";
-  return "sometimes";
-}
-
 function init() {
   loadLocal();
-  if (state.displayName) el("input-name").value = state.displayName;
+  loadPairLocal();
+  repairPairState();
 
-  el("btn-begin").addEventListener("click", startForm);
+  const join = parseJoinFromUrl();
+  if (join) {
+    el("input-partner-code").value = join;
+    if (!state.pair.code) state.pair.role = "partner";
+  }
+
+  if (state.displayName) el("input-name").value = state.displayName;
+  if (join) {
+    el("input-partner-code").value = join;
+  } else if (state.pair.role === "partner" && state.pair.code) {
+    el("input-partner-code").value = state.pair.code;
+  }
+  updateStartPairPanel();
+
+  el("input-partner-code").addEventListener("input", (e) => {
+    e.target.value = normalizeCodeInput(e.target.value);
+  });
+
+  el("btn-begin").addEventListener("click", () => {
+    startForm();
+  });
+  el("btn-gen-code")?.addEventListener("click", () => {
+    void generatePairCode();
+  });
   el("btn-next").addEventListener("click", nextStep);
   el("btn-back").addEventListener("click", prevStep);
   el("btn-download").addEventListener("click", downloadJson);
@@ -393,10 +669,28 @@ function init() {
     state.answers = { blockA: {}, blockB: {} };
     state.step = 0;
     state.displayName = "";
+    state.pair = { code: "", role: "" };
     el("input-name").value = "";
+    el("input-partner-code").value = "";
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PAIR_STORAGE_KEY);
+    el("start-code-panel").classList.add("hidden");
     showView("start");
   });
+
+  el("btn-copy-start-code")?.addEventListener("click", () =>
+    copyText(state.pair.code, el("start-pair-msg"), "Код скопирован"),
+  );
+  el("btn-copy-start-link")?.addEventListener("click", () =>
+    copyText(inviteUrl(state.pair.code), el("start-pair-msg"), "Ссылка скопирована"),
+  );
+  el("btn-copy-done-code")?.addEventListener("click", () =>
+    copyText(el("done-invite-code").textContent, el("done-pair-status"), "Код скопирован"),
+  );
+  el("btn-copy-done-link")?.addEventListener("click", () =>
+    copyText(el("done-invite-link").textContent, el("done-pair-status"), "Ссылка скопирована"),
+  );
+
   el("import-file").addEventListener("change", (e) => {
     const f = e.target.files?.[0];
     if (f) importFile(f);
