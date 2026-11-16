@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Переводчик чувств — анкета</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Переводчик чувств</h1>
+        <p>Анкета для пары (8 + 5 вопросов) на Nostradamus. Каждый заполняет отдельно.</p>
+      </header>
+
+      <section id="view-start">
+        <div class="card">
+          <label class="field-label" for="input-name">Как тебя подписать в анкете?</label>
+          <input type="text" id="input-name" class="name-input" placeholder="Например, Никита" autocomplete="name" />
+          <p style="margin: 1rem 0 0.5rem; font-size: 0.9rem; color: var(--muted)">
+            Настя заполняет свою анкету по той же ссылке на своём устройстве — ответы не смешиваются, пока вы не обменяетесь файлами.
+          </p>
+          <div id="start-error" class="error hidden"></div>
+          <div class="nav-row">
+            <button type="button" class="primary" id="btn-begin">Начать анкету</button>
+          </div>
+          <div class="import-row">
+            <label class="hint">Уже есть сохранённый JSON?</label>
+            <input type="file" id="import-file" accept="application/json,.json" />
+          </div>
+        </div>
+        <div class="card">
+          <p style="margin: 0; font-size: 0.85rem; color: var(--muted)">
+            Вопрос «чего не хватает» только для тебя. Можно скачать JSON или сохранить на сервер (если настроена БД).
+          </p>
+        </div>
+      </section>
+
+      <section id="view-form" class="hidden">
+        <p id="form-subtitle" style="color: var(--muted); font-size: 0.9rem; margin: 0 0 0.75rem"></p>
+        <div class="progress"><div id="progress-fill" style="width: 8%"></div></div>
+        <div class="card">
+          <label class="field-label" id="question-title"></label>
+          <div id="question-body"></div>
+          <div id="step-error" class="error hidden"></div>
+          <div class="nav-row">
+            <button type="button" class="secondary" id="btn-back">Назад</button>
+            <button type="button" class="primary" id="btn-next">Далее</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-done" class="hidden">
+        <div class="card done-panel">
+          <h2>Готово, <span id="done-name"></span>!</h2>
+          <p class="ok">Анкета сохранена в браузере на этом устройстве.</p>
+          <button type="button" class="primary" id="btn-download" style="width: 100%; margin-top: 1rem">
+            Скачать JSON
+          </button>
+          <button type="button" class="secondary" id="btn-save-server" style="width: 100%; margin-top: 0.65rem">
+            Сохранить на сервер
+          </button>
+          <p id="save-server-msg" class="hint" style="margin-top: 0.5rem"></p>
+          <div id="share-for-nastya" class="share-box">
+            <strong>Для Насти:</strong> отправь ей ссылку ниже, пусть введёт имя «Настя» и заполнит анкету на своём устройстве.
+            <br /><br />
+            Адрес: <code id="share-link"></code>
+          </div>
+          <div class="nav-row">
+            <button type="button" class="secondary" id="btn-restart">Править ответы</button>
+            <button type="button" class="secondary" id="btn-new-person">Другой человек на этом ПК</button>
+          </div>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
