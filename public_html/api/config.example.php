@@ -6,8 +6,8 @@ declare(strict_types=1);
  */
 return [
     'db_host' => 'localhost',
-    'db_name' => 'mrpuffch_webapp',
-    'db_user' => 'mrpuffch_webapp',
+    'db_name' => 'mrpuffch_weapp',
+    'db_user' => 'mrpuffch_weapp',
     'db_pass' => 'ЗАМЕНИТЬ',
     'save_token' => '', // опционально: секрет в заголовке X-Save-Token
 ];

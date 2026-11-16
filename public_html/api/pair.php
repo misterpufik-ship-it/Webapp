@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/pair_storage.php';
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -8,13 +10,6 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
-    exit;
-}
-
-$storageDir = __DIR__ . '/storage/pairs';
-if (!is_dir($storageDir) && !mkdir($storageDir, 0755, true) && !is_dir($storageDir)) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'storage'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -27,47 +22,6 @@ function normalize_code(string $code): ?string
     return $code;
 }
 
-function pair_path(string $storageDir, string $code): string
-{
-    return $storageDir . '/' . $code . '.json';
-}
-
-function read_pair(string $path): ?array
-{
-    if (!is_file($path)) {
-        return null;
-    }
-    $raw = file_get_contents($path);
-    if ($raw === false) {
-        return null;
-    }
-    $data = json_decode($raw, true);
-    return is_array($data) ? $data : null;
-}
-
-function write_pair(string $path, array $data): bool
-{
-    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    if ($json === false) {
-        return false;
-    }
-    return file_put_contents($path, $json, LOCK_EX) !== false;
-}
-
-function public_status(array $data): array
-{
-    return [
-        'code' => $data['code'] ?? '',
-        'owner_name' => $data['owner_name'] ?? null,
-        'partner_name' => $data['partner_name'] ?? null,
-        'owner_has_profile' => !empty($data['owner_profile']),
-        'partner_has_profile' => !empty($data['partner_profile']),
-        'paired' => !empty($data['owner_profile']) && !empty($data['partner_profile']),
-        'created_at' => $data['created_at'] ?? null,
-        'updated_at' => $data['updated_at'] ?? null,
-    ];
-}
-
 function random_code(): string
 {
     $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -78,6 +32,12 @@ function random_code(): string
     return $out;
 }
 
+if (!app_db_ready() && !pair_ensure_file_dir()) {
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'storage'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $code = normalize_code((string) ($_GET['code'] ?? ''));
     if ($code === null) {
@@ -85,13 +45,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         echo json_encode(['ok' => false, 'error' => 'bad_code'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    $data = read_pair(pair_path($storageDir, $code));
+    $data = pair_load($code);
     if ($data === null) {
         http_response_code(404);
         echo json_encode(['ok' => false, 'error' => 'not_found'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    echo json_encode(['ok' => true, 'pair' => public_status($data)], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => true, 'pair' => pair_public_status($data)], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -120,30 +80,21 @@ if ($action === 'create') {
     }
 
     $requested = isset($body['code']) ? normalize_code((string) $body['code']) : null;
-    $now = gmdate('c');
 
     for ($try = 0; $try < 8; $try++) {
         $code = $requested ?? random_code();
-        $path = pair_path($storageDir, $code);
-        if (is_file($path) && $requested === null) {
+        if (pair_mysql_code_taken($code)) {
+            if ($requested !== null) {
+                http_response_code(409);
+                echo json_encode(['ok' => false, 'error' => 'code_taken'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
             continue;
         }
-        if (is_file($path) && $requested !== null) {
-            http_response_code(409);
-            echo json_encode(['ok' => false, 'error' => 'code_taken'], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        $data = [
-            'code' => $code,
-            'created_at' => $now,
-            'updated_at' => $now,
-            'owner_name' => $displayName,
-            'partner_name' => null,
-            'owner_profile' => null,
-            'partner_profile' => null,
-        ];
-        if (write_pair($path, $data)) {
-            echo json_encode(['ok' => true, 'pair' => public_status($data)], JSON_UNESCAPED_UNICODE);
+
+        $data = pair_create_record($code, $displayName);
+        if ($data !== null) {
+            echo json_encode(['ok' => true, 'pair' => pair_public_status($data)], JSON_UNESCAPED_UNICODE);
             exit;
         }
         break;
@@ -162,8 +113,7 @@ if ($action === 'join') {
         echo json_encode(['ok' => false, 'error' => 'bad_request'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    $path = pair_path($storageDir, $code);
-    $data = read_pair($path);
+    $data = pair_load($code);
     if ($data === null) {
         http_response_code(404);
         echo json_encode(['ok' => false, 'error' => 'not_found'], JSON_UNESCAPED_UNICODE);
@@ -176,12 +126,12 @@ if ($action === 'join') {
     }
     $data['partner_name'] = $displayName;
     $data['updated_at'] = gmdate('c');
-    if (!write_pair($path, $data)) {
+    if (!pair_save($data)) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'write_failed'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    echo json_encode(['ok' => true, 'pair' => public_status($data)], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => true, 'pair' => pair_public_status($data)], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -195,8 +145,7 @@ if ($action === 'save_profile') {
         echo json_encode(['ok' => false, 'error' => 'bad_request'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    $path = pair_path($storageDir, $code);
-    $data = read_pair($path);
+    $data = pair_load($code);
     if ($data === null) {
         http_response_code(404);
         echo json_encode(['ok' => false, 'error' => 'not_found'], JSON_UNESCAPED_UNICODE);
@@ -214,12 +163,12 @@ if ($action === 'save_profile') {
         $data['partner_profile'] = $profile;
     }
     $data['updated_at'] = gmdate('c');
-    if (!write_pair($path, $data)) {
+    if (!pair_save($data)) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => 'write_failed'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    echo json_encode(['ok' => true, 'pair' => public_status($data)], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => true, 'pair' => pair_public_status($data)], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

@@ -1,8 +1,8 @@
 # Webapp — Переводчик чувств (анкета)
 
-Публичный путь: **https://nostradamus-1503.ru/webapp/**
+Публичный путь: **https://nostradamus-1503.ru/WeApp/**
 
-Отдельный репозиторий от «Приложение для пар». Деплой только эту папку на BeGet (через VPS), не смешивать с основным rsync Nostradamus без `--exclude webapp`.
+Отдельный репозиторий от «Приложение для пар». Деплой только в `WeApp/` на BeGet, без затрагивания остального Nostradamus.
 
 ## Деплой
 
@@ -12,15 +12,22 @@
 python scripts/deploy-beget-password.py
 ```
 
-Через VPS (если доступен): `.\scripts\deploy-beget.ps1`
+## MySQL (пары и анкеты)
 
-## База данных (BeGet, опционально)
+1. **BeGet → MySQL** — создать БД и пользователя (имена обычно `mrpuffch_weapp`).
+2. В `deploy/beget-ssh.local.env` добавить `BEGET_MYSQL_*` (см. `beget-ssh.local.env.example`).
+3. Применить схему и залить `config.local.php` на сервер:
 
-1. Панель BeGet → MySQL → создать БД `mrpuffch_webapp` и пользователя.
-2. phpMyAdmin → выполнить [`sql/001_schema.sql`](sql/001_schema.sql).
-3. На сервере: `public_html/api/config.local.php` по образцу [`config.example.php`](public_html/api/config.example.php).
+```powershell
+python scripts/setup-mysql-beget.py
+```
 
-Без `config.local.php` сайт работает (localStorage + скачивание JSON); кнопка «Сохранить на сервер» вернёт понятную ошибку.
+4. Проверка: https://nostradamus-1503.ru/WeApp/api/health.php  
+   Ожидается: `"schema_ready": true`, `"pair_storage": "mysql"`.
+
+Таблицы: `couples` (код пары, профили owner/partner), `questionnaire_submissions` (история сохранений).
+
+Без MySQL анкета работает в браузере, **пара** — через файлы в `api/storage/pairs/` (резерв).
 
 ## GitHub
 

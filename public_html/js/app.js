@@ -405,6 +405,7 @@ async function renderDone() {
   el("done-pair-role").textContent = roleText;
 
   await refreshDonePairStatus();
+  await saveToServer();
   saveLocal();
 }
 
@@ -422,7 +423,8 @@ async function saveToServer() {
       msg.textContent = `Сохранено на сервере (#${data.id}).`;
       msg.style.color = "var(--ok)";
     } else if (data.error === "db_not_configured") {
-      msg.textContent = "MySQL ещё не настроен — пара сохраняется через код выше.";
+      msg.textContent =
+        "MySQL на сервере ещё не настроен (нет config.local.php) — анкета в паре через код; настройка: README Webapp.";
     } else {
       msg.textContent = `Не удалось сохранить: ${data.error || res.status}`;
     }

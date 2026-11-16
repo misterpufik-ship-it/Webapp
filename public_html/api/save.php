@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/pair_storage.php';
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -17,8 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$config = require __DIR__ . '/config.php';
-if ($config === null) {
+$config = app_db_config();
+if ($config === null || !app_db_ready()) {
     http_response_code(503);
     echo json_encode(['ok' => false, 'error' => 'db_not_configured']);
     exit;
@@ -62,6 +65,13 @@ if (!is_array($questionnaire)) {
     exit;
 }
 
+$pairCode = trim((string) ($data['pair_code'] ?? ''));
+$pairCode = $pairCode !== '' ? strtoupper(preg_replace('/[^A-Z0-9]/', '', $pairCode) ?? '') : '';
+$pairRole = (string) ($data['pair_role'] ?? '');
+if ($pairRole !== '' && !in_array($pairRole, ['owner', 'partner'], true)) {
+    $pairRole = '';
+}
+
 $json = json_encode($data, JSON_UNESCAPED_UNICODE);
 if ($json === false) {
     http_response_code(500);
@@ -69,24 +79,20 @@ if ($json === false) {
     exit;
 }
 
-$mysqli = new mysqli(
-    (string) $config['db_host'],
-    (string) $config['db_user'],
-    (string) $config['db_pass'],
-    (string) $config['db_name'],
-);
-if ($mysqli->connect_errno) {
+$db = app_db();
+if ($db === null) {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'db_connect']);
     exit;
 }
-$mysqli->set_charset('utf8mb4');
 
-$stmt = $mysqli->prepare(
-    'INSERT INTO questionnaire_submissions (display_name, payload_json, ip_hash) VALUES (?, ?, ?)'
+$stmt = $db->prepare(
+    'INSERT INTO questionnaire_submissions (display_name, pair_code, pair_role, payload_json, ip_hash) VALUES (?, ?, ?, ?, ?)',
 );
 $ipHash = hash('sha256', (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
-$stmt->bind_param('sss', $displayName, $json, $ipHash);
+$pairCodeParam = $pairCode !== '' ? $pairCode : null;
+$pairRoleParam = $pairRole !== '' ? $pairRole : null;
+$stmt->bind_param('sssss', $displayName, $pairCodeParam, $pairRoleParam, $json, $ipHash);
 $ok = $stmt->execute();
 if (!$ok) {
     http_response_code(500);
@@ -96,6 +102,27 @@ if (!$ok) {
 
 $id = $stmt->insert_id;
 $stmt->close();
-$mysqli->close();
 
-echo json_encode(['ok' => true, 'id' => $id], JSON_UNESCAPED_UNICODE);
+if ($pairCode !== '' && $pairRole !== '') {
+    $existing = pair_load($pairCode);
+    if ($existing !== null) {
+        if ($pairRole === 'owner') {
+            $existing['owner_name'] = $displayName;
+            $existing['owner_profile'] = $data;
+        } else {
+            $existing['partner_name'] = $displayName;
+            $existing['partner_profile'] = $data;
+        }
+        $existing['updated_at'] = gmdate('c');
+        pair_save($existing);
+    }
+}
+
+$db->close();
+
+echo json_encode([
+    'ok' => true,
+    'id' => $id,
+    'pair_code' => $pairCodeParam,
+    'storage' => pair_storage_backend(),
+], JSON_UNESCAPED_UNICODE);
