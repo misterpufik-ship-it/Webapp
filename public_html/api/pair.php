@@ -2,6 +2,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/pair_storage.php';
+require_once __DIR__ . '/dialog_storage.php';
+require_once __DIR__ . '/translate_engine.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -169,6 +171,76 @@ if ($action === 'save_profile') {
         exit;
     }
     echo json_encode(['ok' => true, 'pair' => pair_public_status($data)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'translate_context') {
+    $code = normalize_code((string) ($body['code'] ?? ''));
+    $role = (string) ($body['role'] ?? '');
+    if ($code === null || !in_array($role, ['owner', 'partner'], true)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'bad_request'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $data = pair_load($code);
+    if ($data === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'not_found'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $other = $role === 'owner' ? ($data['partner_profile'] ?? null) : ($data['owner_profile'] ?? null);
+    echo json_encode([
+        'ok' => true,
+        'pair' => pair_public_status($data),
+        'recipient' => translate_sanitize_recipient(is_array($other) ? $other : null),
+        'dialog' => dialog_load($code, $role),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'save_turn') {
+    $code = normalize_code((string) ($body['code'] ?? ''));
+    $role = (string) ($body['role'] ?? '');
+    $turn = $body['turn'] ?? null;
+    if ($code === null || !in_array($role, ['owner', 'partner'], true) || !is_array($turn)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'bad_request'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $safeTurn = [
+        'draft' => mb_substr(trim((string) ($turn['draft'] ?? '')), 0, 2000),
+        'translated' => mb_substr(trim((string) ($turn['translated'] ?? '')), 0, 2000),
+        'emotion' => mb_substr((string) ($turn['emotion'] ?? ''), 0, 200),
+        'nick' => mb_substr((string) ($turn['nick'] ?? ''), 0, 80),
+    ];
+    $turns = dialog_append($code, $role, $safeTurn);
+    echo json_encode(['ok' => true, 'dialog' => $turns], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'translate') {
+    $code = normalize_code((string) ($body['code'] ?? ''));
+    $role = (string) ($body['role'] ?? '');
+    $draft = trim((string) ($body['draft'] ?? ''));
+    $clarify = trim((string) ($body['clarify'] ?? ''));
+    if ($code === null || !in_array($role, ['owner', 'partner'], true) || $draft === '') {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'bad_request'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $data = pair_load($code);
+    if ($data === null) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'not_found'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $sender = $role === 'owner' ? ($data['owner_profile'] ?? null) : ($data['partner_profile'] ?? null);
+    $recipientRaw = $role === 'owner' ? ($data['partner_profile'] ?? null) : ($data['owner_profile'] ?? null);
+    $recipient = translate_sanitize_recipient(is_array($recipientRaw) ? $recipientRaw : null);
+    $history = dialog_load($code, $role);
+    $llm = translate_openai_if_possible($draft, is_array($sender) ? $sender : null, $recipient, $history, $clarify);
+    $result = $llm ?? translate_feelings($draft, is_array($sender) ? $sender : null, $recipient, $history, $clarify);
+    echo json_encode(['ok' => true, 'result' => $result, 'engine' => $llm ? 'openai' : 'local'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

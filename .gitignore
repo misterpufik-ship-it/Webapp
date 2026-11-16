@@ -1,5 +1,7 @@
 public_html/api/config.local.php
+public_html/api/openrouter.local.php
 .env
 deploy/beget-ssh.local.env
 *.log
 public_html/api/storage/pairs/*.json
+public_html/api/storage/dialogs/*.json

@@ -3,16 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Переводчик чувств — анкета</title>
+    <title>Переводчик чувств</title>
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
     <div class="wrap">
       <header>
         <h1>Переводчик чувств</h1>
-        <p>Анкета для пары (8 + 5 вопросов). Каждый заполняет отдельно на своём устройстве.</p>
+        <p>Сначала анкета — потом перевод на язык, который партнёр реально услышит. Не «Настя», а «Жужу».</p>
         <p class="header-note">В вопросах с вариантами можно <strong>выбрать несколько</strong> и всегда есть поле для своего ответа.</p>
       </header>
+      <nav id="main-tabs" class="tabs hidden">
+        <button type="button" class="tab" id="tab-form" data-view="form">Анкета</button>
+        <button type="button" class="tab" id="tab-translate" data-view="translate">Переводчик</button>
+      </nav>
 
       <section id="view-start">
         <div class="card">
@@ -55,6 +59,7 @@
           <div id="start-error" class="error hidden"></div>
           <div class="nav-row">
             <button type="button" class="primary" id="btn-begin">Начать анкету</button>
+            <button type="button" class="secondary hidden" id="btn-start-translator">К переводчику</button>
           </div>
           <div class="import-row">
             <label class="hint">Уже есть сохранённый JSON?</label>
@@ -109,13 +114,48 @@
             Сохранить на сервер
           </button>
           <p id="save-server-msg" class="hint" style="margin-top: 0.5rem"></p>
+          <button type="button" class="primary" id="btn-open-translator" style="width: 100%; margin-top: 0.85rem">
+            Открыть переводчик
+          </button>
           <div class="nav-row">
             <button type="button" class="secondary" id="btn-restart">Править ответы</button>
             <button type="button" class="secondary" id="btn-new-person">Другой человек на этом ПК</button>
           </div>
         </div>
       </section>
+
+      <section id="view-translate" class="hidden">
+        <div class="card translator-hero">
+          <p class="translate-who" id="translate-who"></p>
+          <p class="hint" id="translate-partner-status"></p>
+        </div>
+
+        <div id="dialog-history" class="dialog-history" aria-live="polite"></div>
+
+        <div class="card">
+          <label class="field-label" for="input-tell">Я хочу тебе сказать</label>
+          <p class="hint">Пиши как есть — даже резко или сбивчиво. Система переложит это на язык, который партнёр лучше услышит.</p>
+          <textarea id="input-tell" rows="5" maxlength="2000" placeholder="Например: ты меня совсем не слышишь, мы никуда не ходим..."></textarea>
+          <div id="translate-error" class="error hidden"></div>
+          <div class="nav-row">
+            <button type="button" class="primary" id="btn-translate">Перевести</button>
+          </div>
+        </div>
+
+        <div id="clarify-card" class="card hidden">
+          <label class="field-label" id="clarify-question"></label>
+          <textarea id="input-clarify" rows="3" placeholder="Коротко уточни…"></textarea>
+          <div class="nav-row">
+            <button type="button" class="primary" id="btn-clarify">Уточнить и перевести</button>
+          </div>
+        </div>
+
+        <div id="result-card" class="card hidden">
+          <p class="hint" id="result-meta"></p>
+          <div id="result-variants"></div>
+        </div>
+      </section>
     </div>
-    <script type="module" src="js/app.js?v=20260322"></script>
+    <script type="module" src="js/app.js?v=20261116c"></script>
   </body>
 </html>

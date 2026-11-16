@@ -1,6 +1,49 @@
 const MULTI_HINT = "Можно отметить несколько пунктов и дописать свой вариант в поле ниже.";
 
+export const ZODIAC_OPTIONS = [
+  { value: "aries", label: "Овен" },
+  { value: "taurus", label: "Телец" },
+  { value: "gemini", label: "Близнецы" },
+  { value: "cancer", label: "Рак" },
+  { value: "leo", label: "Лев" },
+  { value: "virgo", label: "Дева" },
+  { value: "libra", label: "Весы" },
+  { value: "scorpio", label: "Скорпион" },
+  { value: "sagittarius", label: "Стрелец" },
+  { value: "capricorn", label: "Козерог" },
+  { value: "aquarius", label: "Водолей" },
+  { value: "pisces", label: "Рыбы" },
+  { value: "prefer_not", label: "Не указывать" },
+];
+
 export const QUESTIONS = {
+  blockIntro: [
+    {
+      id: "P0_gender",
+      text: "Какой у тебя пол?",
+      type: "single",
+      hint: "Нужен только для грамматики в переводах, не для стереотипов.",
+      options: [
+        { value: "female", label: "Женский" },
+        { value: "male", label: "Мужской" },
+        { value: "other", label: "Другой" },
+        { value: "prefer_not", label: "Не указывать" },
+      ],
+    },
+    {
+      id: "P0_age",
+      text: "Сколько тебе лет?",
+      type: "number",
+      min: 16,
+      max: 99,
+    },
+    {
+      id: "P0_zodiac",
+      text: "Какой у тебя знак зодиака?",
+      type: "single",
+      options: ZODIAC_OPTIONS,
+    },
+  ],
   blockA: [
     {
       id: "A1_upset_need",
@@ -148,6 +191,14 @@ export const QUESTIONS = {
       type: "text",
       hint: "Одно реалистичное изменение",
       maxLength: 500,
+    },
+  ],
+  blockNick: [
+    {
+      id: "N1_how_you_call",
+      text: "Как вы друг друга называете?",
+      type: "pair_names",
+      hint: "Не паспортное имя, а как зовёте в жизни. Чтобы в переводах было «Жужу», а не «Настя».",
     },
   ],
 };
